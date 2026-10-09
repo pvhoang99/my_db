@@ -15,15 +15,15 @@ Bản dịch tiếng Việt nằm trong `docs/sach/` — **gitignore**, chỉ đ
 | 03 | B-Tree & Crash Recovery | 14 | — | ✅ `03-btree-va-crash-recovery.md` |
 | 04 | B+Tree Node and Insertion | 20 | 366 | ✅ `04-btree-node-va-insertion.md` |
 | 05 | B+Tree Deletion and Testing | 30 | — | ✅ `05-btree-deletion-va-testing.md` |
-| 06 | Append-Only KV Store | 35 | 601 | 🚧 |
-| 07 | Free List: Recycle & Reuse | 47 | 731 | ⬜ |
-| 08 | Tables on KV | 57 | 1107 | ⬜ |
-| 09 | Range Queries | 66 | 1294 | ⬜ |
-| 10 | Secondary Indexes | 71 | 1438 | ⬜ |
-| 11 | Atomic Transactions | 76 | 1461 | ⬜ |
-| 12 | Concurrency Control | 80 | 1702 | ⬜ |
-| 13 | SQL Parser | 88 | — | ⬜ |
-| 14 | Query Language | 96 | 2795 | ⬜ |
+| 06 | Append-Only KV Store | 35 | 601 | ✅ `06-append-only-kv-store.md` |
+| 07 | Free List: Recycle & Reuse | 47 | 731 | ✅ `07-free-list.md` |
+| 08 | Tables on KV | 57 | 1107 | ✅ `08-tables-tren-kv.md` |
+| 09 | Range Queries | 66 | 1294 | ✅ `09-range-queries.md` |
+| 10 | Secondary Indexes | 71 | 1438 | ✅ `10-secondary-indexes.md` |
+| 11 | Atomic Transactions | 76 | 1461 | ✅ `11-atomic-transactions.md` |
+| 12 | Concurrency Control | 80 | 1702 | ✅ `12-concurrency-control.md` |
+| 13 | SQL Parser | 88 | — | ✅ `13-sql-parser.md` |
+| 14 | Query Language | 96 | 2795 | ✅ `14-query-language.md` |
 
 Mỗi bản dịch có thêm mục **📌 Đối chiếu với PostgreSQL** ở cuối — phần này
 **không có trong sách**, là ghi chú riêng để bám mục tiêu học Postgres.
@@ -49,6 +49,6 @@ nhưng **cách hiện thực** thì khác Postgres ở gần như mọi tầng.
 
 ## Kế hoạch
 
-1. **Đang làm:** dịch hết 14 chương ra tiếng Việt vào `docs/sach/`.
+1. ~~Dịch hết 14 chương ra tiếng Việt vào `docs/sach/`.~~ ✅ **Xong** (4.598 dòng).
 2. Sau khi đọc xong, chốt kiến trúc để code (bám sách hay bám Postgres).
 3. Code theo `ROADMAP.md`.
