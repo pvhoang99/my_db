@@ -2,8 +2,6 @@ package storage
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"os"
 )
 
@@ -26,55 +24,39 @@ type HeapFile struct {
 }
 
 // OpenHeapFile mở (hoặc tạo) file chứa page.
+//
+// TODO:
+//   - os.OpenFile với O_RDWR|O_CREATE
+//   - Stat() để biết file dài bao nhiêu -> suy ra numPages
+//   - size không chia hết cho PageSize nghĩa là file hỏng -> trả lỗi (nhớ Close)
 func OpenHeapFile(path string) (*HeapFile, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
-	if err != nil {
-		return nil, err
-	}
-	info, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	if info.Size()%PageSize != 0 {
-		f.Close()
-		return nil, fmt.Errorf("storage: file %s dài %d byte, không chia hết cho page size", path, info.Size())
-	}
-	return &HeapFile{f: f, numPages: PageID(info.Size() / PageSize)}, nil
+	panic("TODO: OpenHeapFile")
 }
 
 // NumPages là số page hiện có trong file.
 func (h *HeapFile) NumPages() PageID { return h.numPages }
 
 // ReadPage đọc page từ disk vào bộ nhớ.
+//
+// TODO: id >= numPages -> bọc ErrPageNotExist. Dùng ReadAt tại offset
+// id*PageSize để không phụ thuộc con trỏ file (sau này nhiều goroutine cùng đọc).
 func (h *HeapFile) ReadPage(id PageID, p *Page) error {
-	if id >= h.numPages {
-		return fmt.Errorf("%w: page %d (file có %d page)", ErrPageNotExist, id, h.numPages)
-	}
-	if _, err := h.f.ReadAt(p[:], int64(id)*PageSize); err != nil && !errors.Is(err, io.EOF) {
-		return err
-	}
-	return nil
+	panic("TODO: ReadPage")
 }
 
 // WritePage ghi page xuống disk. Chưa fsync — gọi Sync nếu cần bền vững.
+//
+// TODO: tương tự ReadPage nhưng dùng WriteAt.
 func (h *HeapFile) WritePage(id PageID, p *Page) error {
-	if id >= h.numPages {
-		return fmt.Errorf("%w: page %d (file có %d page)", ErrPageNotExist, id, h.numPages)
-	}
-	_, err := h.f.WriteAt(p[:], int64(id)*PageSize)
-	return err
+	panic("TODO: WritePage")
 }
 
 // AllocatePage nối thêm một page rỗng vào cuối file (smgrextend).
+//
+// TODO: ghi một page đã Init() vào offset numPages*PageSize, tăng numPages,
+// trả về id và page vừa tạo.
 func (h *HeapFile) AllocatePage() (PageID, *Page, error) {
-	p := NewPage()
-	id := h.numPages
-	if _, err := h.f.WriteAt(p[:], int64(id)*PageSize); err != nil {
-		return InvalidPageID, nil, err
-	}
-	h.numPages++
-	return id, p, nil
+	panic("TODO: AllocatePage")
 }
 
 // Sync ép dữ liệu xuống disk thật (fsync).

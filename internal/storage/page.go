@@ -13,12 +13,15 @@
 //	└────────────────────────────────────────────────────────────┘
 //	                          ▲                 ▲
 //	                        lower             upper
+//
+// Vì sao hai vùng mọc ngược chiều nhau? Số slot và kích thước tuple đều không
+// biết trước; cho chúng ăn chung một vùng free space ở giữa thì page tự co giãn
+// theo dữ liệu thực tế mà không phải chọn trước tỉ lệ nào cả.
 package storage
 
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 )
 
 const (
@@ -55,6 +58,12 @@ const (
 	offFlags   = 14
 )
 
+// Hai helper dưới đây viết sẵn — chỉ là plumbing đọc/ghi số trên byte array.
+func (p *Page) uint16At(off int) uint16 { return binary.LittleEndian.Uint16(p[off:]) }
+func (p *Page) setUint16(off int, v uint16) {
+	binary.LittleEndian.PutUint16(p[off:], v)
+}
+
 // NewPage tạo một page rỗng đã khởi tạo header.
 func NewPage() *Page {
 	p := new(Page)
@@ -63,97 +72,82 @@ func NewPage() *Page {
 }
 
 // Init reset page về trạng thái rỗng (PageInit trong Postgres).
+//
+// TODO: xoá sạch byte array, rồi đặt lower/upper/special về đúng vị trí ban đầu.
+// Gợi ý: page rỗng thì vùng ItemId chưa có phần tử nào, còn vùng tuple chưa bị
+// lấn vào từ phía cuối page.
 func (p *Page) Init() {
-	clear(p[:])
-	p.setUint16(offLower, pageHeaderSize)
-	p.setUint16(offUpper, PageSize)
-	p.setUint16(offSpecial, PageSize)
-}
-
-func (p *Page) uint16At(off int) uint16 { return binary.LittleEndian.Uint16(p[off:]) }
-func (p *Page) setUint16(off int, v uint16) {
-	binary.LittleEndian.PutUint16(p[off:], v)
+	panic("TODO: Init")
 }
 
 // LSN trả về log sequence number của thay đổi cuối cùng trên page.
-func (p *Page) LSN() uint64 { return binary.LittleEndian.Uint64(p[offLSN:]) }
+func (p *Page) LSN() uint64 {
+	panic("TODO: LSN")
+}
 
 // SetLSN ghi lại LSN; WAL dùng nó để quyết định có cần redo page hay không.
-func (p *Page) SetLSN(lsn uint64) { binary.LittleEndian.PutUint64(p[offLSN:], lsn) }
+func (p *Page) SetLSN(lsn uint64) {
+	panic("TODO: SetLSN")
+}
 
 func (p *Page) lower() uint16 { return p.uint16At(offLower) }
 func (p *Page) upper() uint16 { return p.uint16At(offUpper) }
 
 // NumSlots trả về số slot đã cấp phát, kể cả slot đã xoá.
 // Slot đã xoá vẫn chiếm chỗ vì TID (page, slot) phải ổn định.
+//
+// TODO: suy ra từ lower — vùng ItemId bắt đầu ngay sau header, mỗi phần tử
+// dài itemIDSize byte.
 func (p *Page) NumSlots() int {
-	return int(p.lower()-pageHeaderSize) / itemIDSize
+	panic("TODO: NumSlots")
 }
 
-// FreeSpace là số byte còn trống, đã trừ đi ItemId cần thêm cho tuple mới.
+// FreeSpace là số byte còn trống, tức khoảng hở giữa hai vùng đang mọc vào nhau.
+//
+// TODO: nhớ rằng mỗi tuple mới tốn thêm một ItemId nữa, nên caller phải so sánh
+// len(tuple)+itemIDSize với giá trị này.
 func (p *Page) FreeSpace() int {
-	free := int(p.upper()) - int(p.lower())
-	if free < 0 {
-		return 0
-	}
-	return free
+	panic("TODO: FreeSpace")
 }
 
 // itemID đọc cặp (offset, length) của slot thứ i.
+//
+// TODO: tính địa chỉ base của slot rồi đọc hai uint16 liên tiếp.
 func (p *Page) itemID(slot int) (off, length uint16) {
-	base := pageHeaderSize + slot*itemIDSize
-	return p.uint16At(base), p.uint16At(base + 2)
+	panic("TODO: itemID")
 }
 
 func (p *Page) setItemID(slot int, off, length uint16) {
-	base := pageHeaderSize + slot*itemIDSize
-	p.setUint16(base, off)
-	p.setUint16(base+2, length)
+	panic("TODO: setItemID")
 }
 
 // Insert ghi tuple vào page và trả về số hiệu slot.
 // Slot number chính là phần "offset" trong TID của Postgres.
+//
+// TODO các bước:
+//  1. tuple dài hơn sức chứa tối đa của một page  -> ErrTupleTooBig
+//  2. không đủ chỗ cho cả tuple lẫn ItemId mới    -> ErrPageFull
+//  3. hạ upper xuống len(tuple) byte, copy tuple vào vị trí mới
+//  4. nâng lower lên itemIDSize byte, ghi ItemId trỏ tới tuple vừa copy
+//  5. trả về số hiệu slot vừa cấp
 func (p *Page) Insert(tuple []byte) (int, error) {
-	if len(tuple) > PageSize-pageHeaderSize-itemIDSize {
-		return 0, ErrTupleTooBig
-	}
-	if len(tuple)+itemIDSize > p.FreeSpace() {
-		return 0, ErrPageFull
-	}
-
-	newUpper := p.upper() - uint16(len(tuple))
-	copy(p[newUpper:], tuple)
-
-	slot := p.NumSlots()
-	p.setUint16(offUpper, newUpper)
-	p.setUint16(offLower, p.lower()+itemIDSize)
-	p.setItemID(slot, newUpper, uint16(len(tuple)))
-	return slot, nil
+	panic("TODO: Insert")
 }
 
-// Get trả về nội dung tuple tại slot. Slice trỏ thẳng vào page nên chỉ hợp lệ
-// chừng nào page chưa bị sửa; copy ra ngoài nếu cần giữ lâu.
+// Get trả về nội dung tuple tại slot. Slice nên trỏ thẳng vào page (không copy)
+// để tránh cấp phát; caller tự copy nếu cần giữ lâu.
+//
+// TODO: slot ngoài [0, NumSlots) -> ErrSlotInvalid; slot đã xoá -> ErrSlotDead.
+// Bọc lỗi bằng %w để errors.Is trong test nhận ra.
 func (p *Page) Get(slot int) ([]byte, error) {
-	if slot < 0 || slot >= p.NumSlots() {
-		return nil, fmt.Errorf("%w: slot %d", ErrSlotInvalid, slot)
-	}
-	off, length := p.itemID(slot)
-	if off == 0 {
-		return nil, fmt.Errorf("%w: slot %d", ErrSlotDead, slot)
-	}
-	return p[off : off+length], nil
+	panic("TODO: Get")
 }
 
 // Delete đánh dấu slot là dead. Không gom lại free space ngay —
 // giống Postgres, việc đó để dành cho VACUUM (M4).
+//
+// TODO: quy ước ở đây là ItemId có offset == 0 nghĩa là dead (offset 0 không bao
+// giờ hợp lệ vì vùng đó thuộc header).
 func (p *Page) Delete(slot int) error {
-	if slot < 0 || slot >= p.NumSlots() {
-		return fmt.Errorf("%w: slot %d", ErrSlotInvalid, slot)
-	}
-	off, _ := p.itemID(slot)
-	if off == 0 {
-		return fmt.Errorf("%w: slot %d", ErrSlotDead, slot)
-	}
-	p.setItemID(slot, 0, 0)
-	return nil
+	panic("TODO: Delete")
 }

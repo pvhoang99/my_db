@@ -4,22 +4,33 @@ Mini database engine viết bằng Go, build từ con số 0 để hiểu Postgr
 
 Lộ trình chi tiết: [ROADMAP.md](ROADMAP.md)
 
-## Chạy test
+## Cách học với repo này
+
+Mỗi milestone có sẵn **skeleton + test**, phần thân hàm để `panic("TODO: ...")`.
+Nhiệm vụ của bạn là điền code cho đến khi test xanh. Test chính là đặc tả —
+đọc test trước khi viết impl.
 
 ```bash
-go test ./...
+go test ./...                              # chạy tất cả
+go test ./internal/storage -run TestPage -v # chạy riêng một nhóm
 ```
 
 ## Trạng thái
 
-- **M1 — storage layer** ✅ slotted page 8KB (`internal/storage/page.go`) + heap file (`internal/storage/heapfile.go`)
+- **M1 — storage layer** 🚧 skeleton sẵn sàng, chờ bạn điền
+  - [`internal/storage/page.go`](internal/storage/page.go) — slotted page 8KB
+  - [`internal/storage/heapfile.go`](internal/storage/heapfile.go) — dãy page trên disk
 - M2 → M7: xem ROADMAP
 
-## Đọc code theo thứ tự nào
+## Thứ tự làm M1
 
-1. `internal/storage/page.go` — một page 8KB trông như thế nào, tuple nằm ở đâu, tại sao xoá tuple lại không giải phóng chỗ ngay.
-2. `internal/storage/heapfile.go` — page được map xuống file trên disk ra sao.
-3. `internal/storage/*_test.go` — test chính là đặc tả hành vi; đọc test trước khi đọc impl cũng được.
+1. `page.go`: `Init` → `NumSlots` / `FreeSpace` → `itemID` / `setItemID` → `Insert` → `Get` → `Delete` → `LSN` / `SetLSN`
+2. `heapfile.go`: `OpenHeapFile` → `ReadPage` / `WritePage` → `AllocatePage`
+
+Câu hỏi tự kiểm tra sau khi xong:
+- Vì sao `Delete` không dồn tuple lại để lấy lại chỗ trống?
+- Vì sao slot đã xoá vẫn phải chiếm chỗ trong mảng ItemId?
+- Một page 8KB chứa được tối đa bao nhiêu tuple 100 byte? Phần hao đi đâu?
 
 ## Đối chiếu với Postgres thật
 
