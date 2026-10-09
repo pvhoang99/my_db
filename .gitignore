@@ -1,3 +1,6 @@
 *.db
 /tmp/
 minidb
+
+# sách tham khảo — không commit (bản quyền)
+book/
