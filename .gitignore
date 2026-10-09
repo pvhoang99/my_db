@@ -4,3 +4,6 @@ minidb
 
 # sách tham khảo — không commit (bản quyền)
 book/
+
+# bản dịch sách — chỉ đọc local, không phát tán
+docs/sach/
