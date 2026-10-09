@@ -1,6 +1,6 @@
 # Nhật ký học — 09/10/2026
 
-Buổi đầu tiên. Dựng dự án, dịch sách, và học xong **mục 1.1 → 1.3**.
+Buổi đầu tiên. Dựng dự án, dịch sách, học xong **mục 1.1 → 1.3** và phần lớn **1.4**.
 
 ---
 
@@ -183,12 +183,104 @@ Postgres tránh bằng cách đưa `xl_prev` vào mỗi WAL record.
 
 ---
 
-## 7. Lần sau học gì
+## 7. Mục 1.4 — những cái bẫy của `fsync` (học nửa đầu + hiểu cơ chế bẫy 2)
 
-1. **Mục 1.4** — những cái bẫy của `fsync` (gồm `fsync` lên thư mục cha còn nợ
-   từ 1.2, và sự cố **fsyncgate** của PostgreSQL)
+### Bẫy 1: phải `fsync` cả THƯ MỤC CHA
+
+Món nợ từ 1.2. **Thư mục cũng là file** → bảng `tên → inode` cũng nằm trong
+page cache, cũng không bền vững cho tới khi `fsync`.
+
+```
+1. fsync(file)        -> du lieu moi an toan tren dia     OK, ai cung nho
+2. rename(tmp, db)    -> sua mot dong trong BANG thu muc  ...dang o page cache
+3. fsync(THU MUC)     -> cai ten moi cung an toan          <-- BUOC HAY BI QUEN
+```
+
+Thiếu bước 3, mất điện ngay sau rename:
+
+| Thứ | Trên đĩa |
+|---|---|
+| Dữ liệu mới (inode mới) | ✅ an toàn |
+| Bảng thư mục `db → inode mới` | ❌ **mất** — vẫn trỏ bản cũ |
+
+→ **Dữ liệu mới nằm đó nhưng không ai tìm thấy.** Update coi như chưa xảy ra,
+dù đã báo client "thành công".
+
+Cách làm (mở thư mục ở chế độ chỉ đọc rồi fsync):
+
+```go
+d, _ := os.Open(filepath.Dir(path))
+d.Sync()
+d.Close()
+```
+
+Cần cả khi `rename` **lẫn khi tạo file mới** (`O_CREATE`) — vì đều là thêm/sửa
+dòng trong bảng thư mục. Chương 6 có hàm `createFileSync()` làm đúng việc này.
+
+### Bẫy 2: `fsync` báo lỗi rồi thì sao?
+
+Suy nghĩ tự nhiên *"lỗi à, thử lại"* là **SAI**.
+
+Vòng đời một trang bẩn:
+
+```
+write()  ->  trang trong page cache danh dau DIRTY
+                       |
+                fsync() / kernel day xuong
+                       v
+               +----------------+
+        OK     |  ghi xuong dia |   LOI (dia day, dia hong...)
+               +----------------+
+                |                        |
+           danh dau CLEAN           danh dau CLEAN   <-- VAN CLEAN!
+           (da an toan)             (du lieu KHONG he xuong dia)
+```
+
+Khi ghi thất bại, kernel Linux **vẫn xoá cờ dirty** và **vứt nội dung thay đổi**,
+chỉ báo lỗi **đúng một lần** cho **một** tiến trình gọi `fsync`.
+
+```
+fsync() lan 1  ->  LOI          "a, thu lai"
+fsync() lan 2  ->  THANH CONG   "tot, chac vua rui thoi"
+```
+
+Lần 2 thành công **không phải vì dữ liệu đã xuống đĩa**, mà vì **không còn trang
+bẩn nào để ghi**. Dữ liệu **vĩnh viễn không xuống đĩa**.
+
+Và **không tự kiểm tra lại được**: đọc lại file thì page cache trả về bản trong
+RAM — trông hoàn hảo. Đĩa vẫn là bản cũ. Không phát hiện được cho tới khi reboot.
+
+> Sách: *"Bạn vẫn có thể nhận được dữ liệu mới dù `fsync` đã lỗi (vì OS page
+> cache)! Hành vi này phụ thuộc vào filesystem."*
+
+**Còn dở:** câu chuyện **fsyncgate** (2018) và cách PostgreSQL sửa.
+
+
+---
+
+## 8. Lần sau học gì
+
+### 🎯 Ưu tiên: **CODE lại chương 1** để hiểu bằng tay
+
+Chương 1 ít code nhưng nhiều bẫy — mà bẫy thì chỉ thấm khi tự dẫm phải.
+Kế hoạch: `internal/storage/safewrite/` + test.
+
+| Bước | Viết gì | Để thấy điều gì |
+|---|---|---|
+| 1 | `SaveData1` — mở `O_TRUNC`, ghi, fsync | Có **cửa sổ chết**: dữ liệu cũ mất, mới chưa xong |
+| 2 | `SaveData2` — ghi file tạm, fsync, rename | Mục 1.2. Crash lúc nào cũng còn một bản nguyên vẹn |
+| 3 | `SaveData3` — thêm **fsync thư mục cha** | Mục 1.4 bẫy 1. Trả nốt món nợ |
+| 4 | **Crash test** — giết tiến trình ở điểm ngẫu nhiên, kiểm bất biến | Chứng minh 1 hỏng, 2–3 sống |
+| 5 | `LogKV` — append-only + `len/crc32/payload` + replay | Mục 1.3 |
+| 6 | Dựng 4 tình huống crash lên log, kiểm replay | Torn write; và **tự dẫm bẫy `crc32(b'')==0`** |
+
+Bước 4 là bước đáng giá nhất — nó biến lý thuyết thành thứ **đo được**.
+
+### Rồi mới đọc tiếp
+
+1. Nốt **mục 1.4** — chuyện **fsyncgate** (2018) và cách PostgreSQL sửa
 2. **Mục 1.5** — tóm tắt chương 1
-3. Rồi sang **chương 2** — hashtable, mảng sắp xếp, B+tree vs LSM-tree
+3. Sang **chương 2** — hashtable, mảng sắp xếp, B+tree vs LSM-tree
 
 ## Còn nợ
 
