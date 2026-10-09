@@ -165,8 +165,44 @@ kiểm tra checksum**.
 | **Torn write** — ghi dở **TRƯỚC** khi `fsync` thành công | ✅ **Phát hiện và khôi phục được.** Vứt entry hỏng là xong |
 | Hỏng **SAU** khi `fsync` (bit rot, đĩa lỗi) | ⚠️ **Phát hiện được, nhưng KHÔNG cứu được** |
 
-Checksum là **lưới an toàn cho ranh giới ghi**, không phải phép màu chống hỏng
-đĩa. Muốn chống cái sau cần **sao lưu hoặc nhân bản**.
+### Vì sao phát hiện được mà không cứu được?
+
+Checksum là **một con số tóm tắt**: 1000 byte nén lại thành 4 byte.
+Nén như vậy thì **thông tin đã mất**. Nó chỉ đủ trả lời *"dữ liệu có còn nguyên
+không?"* (có/không), **không đủ** để trả lời *"vậy dữ liệu đúng phải là gì?"*
+
+> Giống như nhớ *"tổng các chữ số trong số điện thoại của tôi là 37"*. Ai chép sai
+> một chữ số thì bạn **phát hiện được**, nhưng **không khôi phục được** số đúng.
+
+### Vậy tại sao torn write lại cứu được?
+
+Vì khi đó **không cần khôi phục gì** — chỉ cần **vứt đi**:
+
+| | Entry hỏng nằm ở đâu | Làm gì |
+|---|---|---|
+| **Torn write** | **cuối log**, chưa ai được báo "thành công" | **Vứt** → về trạng thái cũ hợp lệ ✅ |
+| **Hỏng sau `fsync`** | **giữa log**, đã báo client "thành công" | Vứt thì **mất dữ liệu đã cam kết** ❌ |
+
+→ Torn write được cứu **không phải nhờ checksum**, mà nhờ **nó nằm ở cuối và chưa
+được cam kết**. Checksum chỉ đóng vai **người gác cổng chỉ ra ranh giới**.
+
+### Muốn cứu thì cần DƯ THỪA (redundancy)
+
+Phải giữ thêm **bản sao của thông tin**, chứ không phải chỉ bản tóm tắt:
+
+| Cách | Giữ dư thừa gì | Sửa được không |
+|---|---|---|
+| **Checksum** | 4 byte tóm tắt | ❌ chỉ phát hiện |
+| **Backup** | cả một bản cũ | ✅ khôi phục về thời điểm sao lưu |
+| **Replica** | cả một bản đầy đủ, luôn mới | ✅ đọc từ bản kia |
+| **RAID / ZFS** | bản sao hoặc mã sửa lỗi | ✅ tự lành |
+| **ECC RAM** | bit kiểm tra thêm | ✅ sửa 1 bit sai |
+
+PostgreSQL bật `data_checksums` thì **phát hiện** page hỏng và **báo lỗi, từ chối
+đọc** — chứ không sửa. Khôi phục là việc của bạn: **restore từ backup** hoặc
+**failover sang replica**.
+
+> 💡 **Checksum là báo cháy, không phải bình chữa cháy.**
 
 ---
 
