@@ -1,6 +1,6 @@
 # File là gì?
 
-> Viên gạch số 0 — nền móng dưới cả [02-nen-tang-file-he-thong.md](02-nen-tang-file-he-thong.md).
+> Viên gạch số 0 — nền móng dưới cả [03-nen-tang-file-he-thong.md](03-nen-tang-file-he-thong.md).
 
 ## Hai cách nhìn
 
@@ -157,7 +157,7 @@ Và một lệnh thứ 6 mà database **không thể sống thiếu**:
 |---|---|
 
 Chi tiết về `fsync` và page cache: xem
-[02-nen-tang-file-he-thong.md § viên gạch 3](02-nen-tang-file-he-thong.md).
+[03-nen-tang-file-he-thong.md § viên gạch 3](03-nen-tang-file-he-thong.md).
 
 ---
 

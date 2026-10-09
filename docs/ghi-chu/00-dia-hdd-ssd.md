@@ -42,7 +42,7 @@ theo khối lớn thì hiệu quả hơn. Database lại gom to hơn tiếp (Pos
 **8KB**, sách dùng **4KB**).
 
 > Đây là gốc rễ của chuyện *"file 1 byte vẫn chiếm 4096 byte"* ở
-> [02-nen-tang-file-he-thong.md](02-nen-tang-file-he-thong.md).
+> [03-nen-tang-file-he-thong.md](03-nen-tang-file-he-thong.md).
 
 ---
 
