@@ -89,6 +89,72 @@ có thể dở dang. Sách liệt kê 3 khả năng:
 > Trường hợp (c) nghe lạ nhưng có thật: **metadata (kích thước) và dữ liệu là hai
 > thứ riêng biệt**, chúng xuống đĩa không cùng lúc.
 
+## 4b. Torn write là gì
+
+**Torn write** = *"ghi bị xé rách"* — một lệnh ghi bị **đứt giữa chừng**, chỉ một
+phần dữ liệu xuống được đĩa.
+
+### Vì sao nó xảy ra
+
+Bạn gọi `write(8192 byte)` và nghĩ đó là **một hành động**. Phần cứng không thấy vậy:
+
+```
+Lenh cua ban:   write(8192 byte)
+                        |
+                        v   he dieu hanh + o dia chia nho ra
+   +----+----+----+----+----+----+----+----+ ...  16 sector x 512B
+   | s0 | s1 | s2 | s3 | s4 | s5 | s6 | s7 |
+   +----+----+----+----+----+----+----+----+
+     OK   OK   OK   OK   <-- MAT DIEN O DAY
+                          X    X    X    X
+```
+
+Đĩa chỉ **đảm bảo atomic ở mức một sector** (512 byte) — và nhiều ổ còn không
+đảm bảo nổi cả điều đó. Ghi nhiều sector thì **không có đảm bảo nào**: mất điện
+giữa chừng để lại **một nửa mới, một nửa cũ**. Chữ *"torn"* (rách) là vì thế.
+
+### Hai kiểu, và kiểu thứ hai tệ hơn nhiều
+
+Mô phỏng ghi đè một trang 4KB, mất điện sau 5/8 sector:
+
+```
+Trang CU  : header noi 3 key | 'A'...'A'
+Trang MOI : header noi 9 key | 'B'...'B'
+Trang RACH: header noi 9 key | 'B'...'A'   <- nua moi, nua cu
+```
+
+Trang rách **không tương ứng với bất kỳ phiên bản nào**. Header nói 9 key nhưng
+nửa sau dữ liệu vẫn của bản cũ. **Cấu trúc hỏng.**
+
+| | Torn log | Torn page |
+|---|---|---|
+| Vị trí phần rách | **cuối** log | **giữa** dữ liệu |
+| Dữ liệu cũ | **còn nguyên** ở phía trước | **đã bị ghi đè — mất rồi** |
+| Cách xử lý | vứt entry cuối → xong ✅ | vứt thì **về đâu?** ❌ |
+
+> 🔑 **Log chỉ nối thêm nên không bao giờ phá bản cũ.** Còn ghi đè page thì bản cũ
+> **biến mất ngay khi bắt đầu ghi** — rách là mất cả hai.
+
+### Tránh torn page bằng chính nguyên tắc của 1.2
+
+Nhớ lại: ***đừng phá dữ liệu cũ***. Hai cách, sẽ gặp cả hai:
+
+| Cách | Làm gì | Ai dùng |
+|---|---|---|
+| **Copy-on-write** | Ghi ra **page mới**, không đụng page cũ, rồi chuyển con trỏ | **Sách** (ch.3), SQLite, BoltDB |
+| **Double-write / full-page write** | **Lưu bản sao page trước** vào log + fsync, rồi mới ghi đè. Crash thì apply mù bản sao | **PostgreSQL**, MySQL |
+
+Cả hai cùng một nguyên lý mà chương 3 sẽ phát biểu:
+
+> **Tại mọi thời điểm, phải luôn có đủ thông tin để dựng lại hoặc trạng thái cũ,
+> hoặc trạng thái mới.**
+
+Torn page chính là **lý do tồn tại** của `full_page_writes` trong PostgreSQL —
+tham số mà nếu tắt đi để WAL nhỏ lại, bạn đánh đổi bằng nguy cơ hỏng dữ liệu.
+
+> 📌 Một câu: **torn write là hậu quả của việc một lệnh ghi của bạn không phải
+> một hành động atomic dưới mắt phần cứng.**
+
 ## 5. Giải pháp: checksum cho mỗi entry
 
 Định dạng một entry:
@@ -226,4 +292,5 @@ PostgreSQL bật `data_checksums` thì **phát hiện** page hỏng và **báo l
 1. Vì sao log ghi nhanh hơn chiêu rename của 1.2, nhưng đọc lại chậm hơn?
 2. Checksum làm cho update log trở nên "atomic" theo nghĩa nào?
 3. Vì sao một vùng toàn byte `00` lại vượt qua được kiểm tra `crc32`?
+5. Vì sao torn **log** cứu được mà torn **page** thì không?
 4. Checksum có cứu được dữ liệu bị hỏng **sau** khi `fsync` thành công không?
