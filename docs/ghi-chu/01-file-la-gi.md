@@ -139,6 +139,56 @@ Kernel chỉ thu hồi dữ liệu khi **cả hai** về 0:
 
 ---
 
+## ⚠️ Hiểu nhầm thường gặp: "fd trỏ vào tên file"
+
+> ❌ Nghĩ sai: fd trỏ vào **cái tên**.
+> ✅ Đúng: **fd trỏ thẳng vào inode.**
+
+Cái tên chỉ được dùng **đúng một lần, lúc `open`**. Sau đó vứt đi:
+
+```
+open("db")  →  tra bang thu muc MOT LAN  →  lay duoc inode 1000
+                                               |
+                 fd giu chat inode 1000  <-----+
+                 tu gio cai ten "db" bien di dau cung mac ke
+```
+
+Hai hệ quả mà người quen Windows hay đoán sai:
+
+| Chuyện xảy ra với cái tên | Tiến trình đã mở file từ trước thấy gì |
+|---|---|
+| `rm db` — xoá tên | ✅ **Vẫn đọc bình thường.** Dung lượng **chưa** được giải phóng |
+| `rename(db.tmp, db)` — tên trỏ inode khác | ✅ **Vẫn đọc trọn vẹn dữ liệu CŨ** |
+
+Kiểm chứng:
+
+```bash
+sleep 45 < /tmp/big.bin &          # tien trinh khac mo file 300MB
+rm -f /tmp/big.bin                 # XOA THANH CONG, khong bao loi
+ls -l /proc/$!/fd/0
+#  -> /tmp/big.bin (deleted)       <- van doc duoc
+stat -L -c %s /proc/$!/fd/0
+#  -> 300000000                    <- 300MB VAN CHUA duoc giai phong
+```
+
+```bash
+exec 8< /tmp/q6/db                 # A mo file TRUOC
+mv -f /tmp/q6/db.tmp /tmp/q6/db    # B rename de len
+cat /tmp/q6/db   # -> DU LIEU MOI  (ai mo moi bay gio)
+cat <&8          # -> DU LIEU CU   (A van thay ban cu!)
+```
+
+> 🔑 **Đây chính là lý do chiêu `rename` ở mục 1.2 của sách an toàn:**
+> reader đang đọc bản cũ, writer thay bản mới vào — **không ai đợi ai, không ai
+> thấy dữ liệu rách**. Chương 12 sẽ gọi tên ý tưởng này là **RCU**, và nó cũng
+> là nền của **MVCC** trong PostgreSQL.
+
+**Bẫy vận hành kinh điển:** xoá file log 50GB xong mà `df -h` vẫn báo đầy đĩa —
+vì tiến trình ghi log **chưa restart**, vẫn đang giữ fd. Phải restart nó
+(hoặc dùng `truncate -s 0`) thì chỗ mới thật sự về.
+
+---
+
 ## 5 thao tác cơ bản với file
 
 Toàn bộ việc dùng file quy về 5 lệnh (syscall) này:
