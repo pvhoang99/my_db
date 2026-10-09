@@ -1,44 +1,26 @@
 # minidb
 
-Mini database engine viết bằng Go, build từ con số 0 để hiểu PostgreSQL từ a→z.
+Mini database engine viết bằng Go, build từ con số 0 để làm chủ PostgreSQL từ a→z.
 
-Lộ trình chi tiết: [ROADMAP.md](ROADMAP.md)
-
-## Cách học với repo này
-
-Mỗi milestone có sẵn **skeleton + test**, phần thân hàm để `panic("TODO: ...")`.
-Nhiệm vụ của bạn là điền code cho đến khi test xanh. Test chính là đặc tả —
-đọc test trước khi viết impl.
-
-```bash
-go test ./...                              # chạy tất cả
-go test ./internal/storage -run TestPage -v # chạy riêng một nhóm
-```
+- [ARCHITECTURE.md](ARCHITECTURE.md) — kiến trúc thư mục, luật phụ thuộc, map sang source Postgres
+- [ROADMAP.md](ROADMAP.md) — lộ trình 7 milestone
 
 ## Trạng thái
 
-- **M1 — storage layer** 🚧 skeleton sẵn sàng, chờ bạn điền
-  - [`internal/storage/page.go`](internal/storage/page.go) — slotted page 8KB
-  - [`internal/storage/heapfile.go`](internal/storage/heapfile.go) — dãy page trên disk
-- M2 → M7: xem ROADMAP
+Project mới khởi tạo: đã có go.mod và khung thư mục, chưa có code.
+Bắt đầu từ **M1 — storage layer** (`internal/storage`).
 
-## Thứ tự làm M1
+## Chạy test
 
-1. `page.go`: `Init` → `NumSlots` / `FreeSpace` → `itemID` / `setItemID` → `Insert` → `Get` → `Delete` → `LSN` / `SetLSN`
-2. `heapfile.go`: `OpenHeapFile` → `ReadPage` / `WritePage` → `AllocatePage`
+```bash
+go test ./...
+```
 
-Câu hỏi tự kiểm tra sau khi xong:
-- Vì sao `Delete` không dồn tuple lại để lấy lại chỗ trống?
-- Vì sao slot đã xoá vẫn phải chiếm chỗ trong mảng ItemId?
-- Một page 8KB chứa được tối đa bao nhiêu tuple 100 byte? Phần hao đi đâu?
+## Nguyên tắc làm việc trong repo này
 
-## Đối chiếu với Postgres thật
-
-| Khái niệm ở đây | Trong Postgres |
-|---|---|
-| `PageSize = 8192` | `BLCKSZ` |
-| `Page` | `Page` / `PageHeaderData` (`bufpage.h`) |
-| `ItemId (offset, length)` | `ItemIdData` |
-| `(PageID, slot)` | `ItemPointerData` — tức TID, cái bạn thấy ở `SELECT ctid FROM t` |
-| `HeapFile` | relation file `base/<db>/<relfilenode>` |
-| `LSN` trong page header | `pd_lsn` |
+1. Làm lần lượt từng milestone, không nhảy cóc — tầng trên luôn dựa vào tầng dưới.
+2. Đặt tên khái niệm **giống Postgres thật** (page, tuple, ItemId, TID, LSN, xmin/xmax),
+   để kiến thức chuyển thẳng được sang khi đọc source Postgres.
+3. Mỗi milestone xong thì viết một file ghi chú trong `docs/` — tóm tắt đã học được gì,
+   chỗ nào bất ngờ, Postgres làm khác mình ra sao.
+4. Ưu tiên code đọc hiểu được hơn code nhanh. Tối ưu là chuyện sau.

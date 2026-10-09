@@ -29,7 +29,7 @@ psql / pgx driver
 
 | # | Nội dung | Tương ứng trong Postgres | Trạng thái |
 |---|----------|--------------------------|------------|
-| M1 | Slotted page 8KB + heap file trên disk | `bufpage.c`, `smgr/md.c` | 🚧 đang làm |
+| M1 | Slotted page 8KB + heap file trên disk | `bufpage.c`, `smgr/md.c` | ⬜ |
 | M2 | Buffer pool (clock-sweep) + B+tree index | `bufmgr.c`, `nbtree/` | ⬜ |
 | M3 | WAL: record, flush, crash recovery (redo) | `xlog.c` | ⬜ |
 | M4 | Transactions + MVCC: xmin/xmax, snapshot, isolation | `heapam.c`, `procarray.c` | ⬜ |
