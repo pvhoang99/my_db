@@ -1,0 +1,193 @@
+# Append-only log — mục 1.3 của sách
+
+> Nối tiếp [03-nen-tang-file-he-thong.md](03-nen-tang-file-he-thong.md) (mục 1.2).
+
+## 1. Vấn đề còn sót lại từ 1.2
+
+Chiêu `rename` ở 1.2 đã cứu được dữ liệu khi crash, nhưng còn **một điểm yếu
+chết người**: mỗi lần update phải **ghi lại TOÀN BỘ file**.
+
+```
+Sua DUNG MOT dong, bang cach ghi lai ca file (SSD ~500 MB/s):
+     1 MB  ->     2 ms
+   100 MB  ->   200 ms
+     1 GB  ->   2,0 giay
+    10 GB  ->  20,5 giay
+```
+
+Và nếu app ghi 1000 lần/giây thì… không thể.
+
+## 2. Ý tưởng: đừng ghi **trạng thái**, hãy ghi **thay đổi**
+
+Chỉ **nối thêm vào cuối file** một dòng mô tả việc vừa làm:
+
+```
+     0         1         2         3
+| set a=1 | set b=2 | set a=3 | del b |      -> trang thai cuoi: a=3
+```
+
+File chỉ-nối-thêm này gọi là **log**.
+
+Nó dùng **đúng nguyên tắc của 1.2** — *không phá dữ liệu cũ* — chỉ khác chỗ áp dụng:
+
+| | 1.2 — rename | 1.3 — log |
+|---|---|---|
+| Giữ dữ liệu cũ bằng cách | ghi ra **file mới** | ghi vào **cuối file** |
+| Mỗi lần update ghi | **toàn bộ** | **chỉ phần thay đổi** |
+
+```python
+def set_(k, v): open(LOG,'a').write(f'set {k}={v}\n')   # chi NOI THEM
+def del_(k):    open(LOG,'a').write(f'del {k}\n')       # chi NOI THEM
+
+def read_all():                    # doc tu dau, ap dung lan luot
+    state = {}
+    for line in open(LOG):
+        op, rest = line.strip().split(' ', 1)
+        if op == 'set': k, v = rest.split('=', 1); state[k] = v
+        else:           state.pop(rest, None)
+    return state
+```
+
+> 🔑 Chi phí update giờ tỉ lệ với **kích thước thay đổi**, không còn tỉ lệ với
+> **kích thước database** → từ `O(N)` xuống `O(1)`.
+
+## 3. Nhưng log đẻ ra 2 vấn đề mới
+
+Đo thật — 100.000 update nhưng chỉ trên 100 key:
+
+```
+Kich thuoc file log     : 1.678.971 byte  (1,60 MB)
+Du lieu THUC SU co ich  :     1.690 byte
+-> LANG PHI             : 99,90%   (993 lan)
+Doc 1 key bat ky        : 50 ms  (phai quet HET file)
+```
+
+1. **Không phải cấu trúc index** → đọc một key phải **quét cả log**, `O(N)`
+2. **Không thu hồi được chỗ** của dữ liệu cũ/đã xoá → file **phình vô hạn**
+
+| | Ghi lại cả file (1.2) | Append-only log (1.3) |
+|---|---|---|
+| **Ghi** | ❌ `O(N)` | ✅ `O(1)` |
+| **Đọc** | ✅ nhanh | ❌ `O(N)` |
+| **Dung lượng** | ✅ gọn | ❌ phình vô hạn |
+
+> **Log một mình KHÔNG ĐỦ để build một DB. Nó phải được kết hợp với một cấu trúc
+> index.** → Đó là câu hỏi mở đầu **chương 2**, và câu trả lời sẽ là
+> **B+tree** hoặc **LSM-tree**.
+
+## 4. Crash giữa lúc đang nối thêm thì sao?
+
+Log **không làm hỏng dữ liệu cũ** — đó là điểm mạnh. Nhưng **entry cuối cùng**
+có thể dở dang. Sách liệt kê 3 khả năng:
+
+| | Chuyện gì xảy ra | File trông ra sao |
+|---|---|---|
+| **a** | Lệnh append **chưa kịp xảy ra** | Log vẫn tốt, thiếu entry cuối |
+| **b** | Entry **ghi được một nửa** | Dòng cuối cụt giữa chừng |
+| **c** | **Kích thước** file tăng nhưng **dữ liệu không có ở đó** | Dòng cuối toàn byte `00` |
+
+> Trường hợp (c) nghe lạ nhưng có thật: **metadata (kích thước) và dữ liệu là hai
+> thứ riêng biệt**, chúng xuống đĩa không cùng lúc.
+
+## 5. Giải pháp: checksum cho mỗi entry
+
+Định dạng một entry:
+
+```
+| len (4B) | crc32 (4B) | payload |
+```
+
+Khi replay: entry nào **checksum sai thì DỪNG LẠI**, coi như từ đó trở đi
+chưa từng xảy ra.
+
+```python
+def entry(p: bytes) -> bytes:
+    return len(p).to_bytes(4,'little') + zlib.crc32(p).to_bytes(4,'little') + p
+
+def replay(path):
+    data = open(path,'rb').read(); state, pos = {}, 0
+    while pos < len(data):
+        if pos+8 > len(data): break                 # header cut giua chung
+        ln  = int.from_bytes(data[pos:pos+4],'little')
+        crc = int.from_bytes(data[pos+4:pos+8],'little')
+        if ln == 0: break                           # <-- xem muc 6!
+        body = data[pos+8:pos+8+ln]
+        if len(body) < ln: break                    # payload thieu
+        if zlib.crc32(body) != crc: break           # CHECKSUM SAI
+        ...apply(body)...
+        pos += 8+ln
+    return state
+```
+
+Kết quả thử cả 4 tình huống crash trên cùng một log `[a=1, b=2, a=3, del b]`:
+
+```
+(a) append chua kip xay ra    -> a=3, b=2   (het file)
+(b) entry ghi duoc mot nua    -> a=3, b=2   (payload thieu)
+(c) file dai ra, du lieu = 00 -> a=3, b=2   (len=0)
+(d) hong 1 bit                -> a=3, b=2   (CHECKSUM SAI)
+```
+
+**Mọi đường đều ra cùng một trạng thái hợp lệ.**
+
+> Đây là ý nghĩa câu sách nói: *"nếu checksum sai thì coi như lần update đó
+> **chưa từng xảy ra** — điều này làm cho việc update log trở nên **atomic**."*
+>
+> **Atomic** ở đây = một entry **hoặc được tính trọn vẹn, hoặc bị bỏ hoàn toàn**.
+> Không bao giờ "áp dụng được một nửa".
+
+## 6. ⚠️ Cái bẫy: `crc32` của chuỗi rỗng bằng 0
+
+Ở trường hợp (c), vùng toàn byte `00` được đọc thành `len = 0`, `crc = 0`.
+Mà:
+
+```python
+zlib.crc32(b'') == 0   # True!
+```
+
+→ Vùng toàn số 0 **trông y hệt một entry rỗng hợp lệ** và **vượt qua được
+kiểm tra checksum**.
+
+**Bản vá:** coi `len == 0` là **dấu hiệu hết log**.
+
+Đây là thứ mọi hệ thống WAL thật đều phải xử lý — **checksum một mình không đủ**
+để chống vùng dữ liệu toàn số 0. Các cách khác thường dùng:
+
+- **Magic bytes** ở đầu mỗi record (chương 6 của sách dùng `DB_SIG` cho meta page)
+- Đưa **vị trí/offset của chính record** vào phần được tính checksum, nên một
+  record toàn số 0 sẽ không khớp
+- **Số thứ tự tăng dần** cho mỗi record
+
+## 7. Giới hạn của checksum
+
+| Loại hỏng | Checksum làm được gì |
+|---|---|
+| **Torn write** — ghi dở **TRƯỚC** khi `fsync` thành công | ✅ **Phát hiện và khôi phục được.** Vứt entry hỏng là xong |
+| Hỏng **SAU** khi `fsync` (bit rot, đĩa lỗi) | ⚠️ **Phát hiện được, nhưng KHÔNG cứu được** |
+
+Checksum là **lưới an toàn cho ranh giới ghi**, không phải phép màu chống hỏng
+đĩa. Muốn chống cái sau cần **sao lưu hoặc nhân bản**.
+
+---
+
+## 📌 Đối chiếu với PostgreSQL
+
+- **WAL của Postgres chính là một append-only log** — đúng ý tưởng mục này.
+  Mỗi WAL record có **CRC32C**, và recovery dừng lại ở record đầu tiên hỏng.
+- Vấn đề *"log phình vô hạn"* Postgres giải bằng **checkpoint**: định kỳ đẩy
+  hết page bẩn xuống đĩa, rồi **xoá/tái sử dụng** các file WAL cũ hơn checkpoint.
+  (Sách sẽ giải bằng **free list** ở chương 7.)
+- Vấn đề *"không có index, phải quét cả log"* Postgres giải bằng cách **không
+  đọc từ WAL** khi truy vấn — WAL chỉ dùng để **redo khi recovery**. Dữ liệu thật
+  nằm trong **heap + B-tree**. Đây đúng là lời khuyên của sách: *log phải được
+  kết hợp với một cấu trúc index*.
+- Cái bẫy `crc32(b'') == 0`: Postgres tránh bằng cách đưa **`xl_prev`** (con trỏ
+  tới record trước) vào mỗi WAL record — một vùng toàn số 0 sẽ có `xl_prev` sai
+  và bị loại ngay.
+
+## Câu hỏi tự kiểm tra
+
+1. Vì sao log ghi nhanh hơn chiêu rename của 1.2, nhưng đọc lại chậm hơn?
+2. Checksum làm cho update log trở nên "atomic" theo nghĩa nào?
+3. Vì sao một vùng toàn byte `00` lại vượt qua được kiểm tra `crc32`?
+4. Checksum có cứu được dữ liệu bị hỏng **sau** khi `fsync` thành công không?

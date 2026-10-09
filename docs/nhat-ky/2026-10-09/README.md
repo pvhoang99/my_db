@@ -1,6 +1,6 @@
 # Nhật ký học — 09/10/2026
 
-Buổi đầu tiên. Dựng dự án, dịch sách, và học xong **mục 1.1 → 1.3 (nửa đầu)**.
+Buổi đầu tiên. Dựng dự án, dịch sách, và học xong **mục 1.1 → 1.3**.
 
 ---
 
@@ -105,7 +105,7 @@ thay bản mới — không ai đợi ai. Đây là hạt giống của **RCU** 
 
 ---
 
-## 6. Mục 1.3 — mới học nửa đầu
+## 6. Mục 1.3 — append-only log (học xong)
 
 **Vấn đề còn sót từ 1.2:** rename phải **ghi lại toàn bộ file** mỗi lần update.
 Sửa một dòng trong DB 10GB → ghi lại 10GB (~20 giây). Không dùng được.
@@ -143,16 +143,52 @@ Doc 1 key bat ky        : 50 ms  (phai quet HET file)
 → **Log một mình không đủ. Phải kết hợp với một cấu trúc index.**
 Đó chính là câu hỏi mở đầu **chương 2**, và câu trả lời là **B+tree** hoặc **LSM-tree**.
 
+### Crash giữa lúc đang nối thêm — torn write & checksum
+
+Log không phá dữ liệu cũ, nhưng **entry cuối** có thể dở dang. 3 khả năng sách nêu:
+(a) append chưa kịp xảy ra · (b) entry ghi được một nửa · (c) kích thước file tăng
+nhưng dữ liệu không có ở đó *(metadata và dữ liệu là hai thứ riêng, xuống đĩa
+không cùng lúc)*.
+
+**Giải pháp:** mỗi entry mang một **checksum** — `| len 4B | crc32 4B | payload |`.
+Replay gặp checksum sai thì **dừng**, coi như từ đó trở đi chưa từng xảy ra.
+
+Thử cả 4 tình huống crash trên log `[a=1, b=2, a=3, del b]`:
+
+```
+(a) append chua kip xay ra    -> a=3, b=2   (het file)
+(b) entry ghi duoc mot nua    -> a=3, b=2   (payload thieu)
+(c) file dai ra, du lieu = 00 -> a=3, b=2   (len=0)
+(d) hong 1 bit                -> a=3, b=2   (CHECKSUM SAI)
+```
+
+Mọi đường đều ra **cùng một trạng thái hợp lệ** → đó là nghĩa của *"checksum làm
+cho update log trở nên **atomic**"*: entry **hoặc được tính trọn vẹn, hoặc bị bỏ
+hoàn toàn**.
+
+### ⚠️ Cái bẫy gặp khi tự code demo
+
+Vùng toàn byte `00` đọc ra `len=0, crc=0`. Mà **`zlib.crc32(b'') == 0`** →
+**vượt qua được kiểm tra checksum!** Phải vá bằng cách coi `len == 0` là hết log.
+Postgres tránh bằng cách đưa `xl_prev` vào mỗi WAL record.
+
+### Giới hạn của checksum
+
+| Loại hỏng | Checksum |
+|---|---|
+| **Torn write** (ghi dở **trước** `fsync` thành công) | ✅ phát hiện & khôi phục được |
+| Hỏng **sau** `fsync` (bit rot, đĩa lỗi) | ⚠️ phát hiện được nhưng **không cứu được** |
+
+📝 Chi tiết: [05-append-only-log.md](../../ghi-chu/05-append-only-log.md)
+
 ---
 
 ## 7. Lần sau học gì
 
-1. **Nửa sau của 1.3** — crash giữa lúc đang nối thêm vào log thì sao?
-   → **torn write** và **checksum**
-2. **Mục 1.4** — những cái bẫy của `fsync` (gồm `fsync` lên thư mục cha còn nợ
+1. **Mục 1.4** — những cái bẫy của `fsync` (gồm `fsync` lên thư mục cha còn nợ
    từ 1.2, và sự cố **fsyncgate** của PostgreSQL)
-3. **Mục 1.5** — tóm tắt chương 1
-4. Rồi sang **chương 2** — hashtable, mảng sắp xếp, B+tree vs LSM-tree
+2. **Mục 1.5** — tóm tắt chương 1
+3. Rồi sang **chương 2** — hashtable, mảng sắp xếp, B+tree vs LSM-tree
 
 ## Còn nợ
 

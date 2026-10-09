@@ -13,3 +13,4 @@ riêng mình, nên commit được.
 | 02 | [Thư mục là gì](02-thu-muc-la-gi.md) | Bảng tên→inode, `.` và `..`, đường dẫn, hard/symlink, mount | Mục 1.2 |
 | 03 | [Nền tảng filesystem](03-nen-tang-file-he-thong.md) | inode, page cache, fsync, rename, phân tích crash | Mục 1.1–1.2 |
 | 04 | [Cây nhị phân vs B+tree](04-bst-vs-btree.md) | Vì sao BST không dùng được trên đĩa; fanout tính thế nào; cấu trúc thật 3 tầng | Mục 2.3–2.4 |
+| 05 | [Append-only log](05-append-only-log.md) | Ghi thay đổi thay vì trạng thái; torn write; checksum và cái bẫy crc32(b'')==0 | Mục 1.3 |
