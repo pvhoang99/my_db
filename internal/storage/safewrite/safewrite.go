@@ -10,25 +10,43 @@
 // Xem ghi chú: docs/ghi-chu/03-nen-tang-file-he-thong.md
 package safewrite
 
-import "errors"
+import (
+	"errors"
+	"os"
+)
 
 // ErrNotImplemented chỉ để code build được trước khi bạn điền thân hàm.
 var ErrNotImplemented = errors.New("safewrite: chưa cài đặt")
 
-// SaveData1 ghi đè file tại chỗ. ĐÂY LÀ CÁCH SAI — viết nó để thấy nó sai ở đâu.
+// SaveData1 ghi đè file tại chỗ. ĐÂY LÀ CÁCH SAI — có ở đây để thấy nó sai ở đâu.
 //
-// Các bước:
-//  1. os.OpenFile(path, O_WRONLY|O_CREATE|O_TRUNC, 0o664)
-//  2. defer đóng file
-//  3. ghi data
-//  4. fp.Sync()  (tức fsync)
+// Dòng thời gian khi hàm này chạy:
 //
-// Câu hỏi khi viết xong: giữa bước 1 và bước 4, file trên disk đang ở trạng thái
-// nào? Nếu mất điện ở đó thì còn lại gì?
+//	OpenFile(... O_TRUNC)  -> file về 0 byte. DỮ LIỆU CŨ CHẾT TẠI ĐÂY.
+//	     ! mất điện ở đây = mất sạch, không còn gì
+//	Write(data)            -> dữ liệu mới bắt đầu vào
+//	     ! mất điện ở đây = file cụt một nửa
+//	Sync()                 -> tới đây mới thật sự an toàn
 //
-// TODO: cài đặt.
+// Khoảng từ O_TRUNC tới Sync() là CỬA SỔ CHẾT: dữ liệu cũ đã mất, dữ liệu mới
+// chưa xong. Chạy TestMinhHoa_SaveData1KhongAnToan để thấy nó bằng số liệu.
 func SaveData1(path string, data []byte) error {
-	panic("TODO: SaveData1")
+	// O_WRONLY: chỉ ghi.  O_CREATE: chưa có thì tạo.  O_TRUNC: cắt cụt về 0 byte.
+	// 0o664 chỉ có tác dụng khi file được TẠO MỚI (và còn bị umask cắt bớt).
+	fp, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o664)
+	if err != nil {
+		return err
+	}
+	// Đóng file khi hàm kết thúc, dù thành công hay lỗi.
+	// Bỏ qua lỗi của Close() được, vì Sync() bên dưới đã ép dữ liệu xuống đĩa.
+	defer fp.Close()
+
+	if _, err := fp.Write(data); err != nil {
+		return err
+	}
+
+	// Chưa gọi Sync() thì dữ liệu mới chỉ nằm trong page cache (RAM).
+	return fp.Sync()
 }
 
 // SaveData2 ghi ra file tạm rồi rename đè lên. Đây là mục 1.2 của sách.
