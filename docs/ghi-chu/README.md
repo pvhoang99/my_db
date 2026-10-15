@@ -20,3 +20,4 @@ riêng mình, nên commit được.
 | 09 | [Node format và meta page](09-node-format-va-meta-page.md) | Node tận byte, 3 callback, update 2 pha, meta page atomic | Chương 4, mục 6.1–6.5 |
 | 10 | [Secondary index](10-secondary-index.md) | Bảng = KV, index = KV phụ, index nhiều cột, atomicity không composable | Mục 8.1, chương 10 |
 | 11 | [Postgres index thật](11-postgres-index-thuc-te.md) | pageinspect: heap + ctid, cây 3 tầng, index-only, skip scan, bitmap, UPDATE | Đối chiếu Postgres |
+| 12 | [Bên trong một page](12-ben-trong-page.md) | 5 phần của page; page header vs ô vs tuple header; OffsetNumber; thứ tự 6 bước; TOAST và dòng > 8KB | Đối chiếu Postgres, M1 |
