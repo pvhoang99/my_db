@@ -8,3 +8,4 @@ nghiệm gì, sai ở đâu, lần sau học gì.
 |---|---|
 | [09/10/2026](2026-10-09/) | Dựng dự án · dịch 15 chương sách · nền tảng đĩa/file/thư mục/fsync · BST vs B+tree · mục 1.1–1.4 |
 | [10/10/2026](2026-10-10/) | Review safewrite · checksum · chương 2, 3, 4, 6 (nửa đầu), 10 · mổ index PostgreSQL 18 bằng pageinspect |
+| [11–12/10/2026](2026-10-12/) | Đọc EXPLAIN (giải phẫu, 4 kiểu quét, bitmap, heap) · chốt cách làm minidb, roadmap chi tiết · code **M1** (page, tuple, heap, pagedump) + **M2** (buffer pool, B-tree đọc/chèn/split, Seq/Index/Bitmap Scan), đối chiếu từng số với Postgres |
