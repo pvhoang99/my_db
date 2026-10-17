@@ -243,7 +243,9 @@ Các test case **để lại làm bài tập**. Việc tiếp theo là đưa B+t
   `REINDEX`.
 - Lý do Postgres né merge: merge đòi hỏi khoá nhiều page cùng lúc, rất khó làm
   đúng khi có nhiều writer đồng thời — trong khi sách chỉ có **1 writer**.
-- **Sentinel key rỗng** của sách tương ứng với **"high key"** và page **leftmost**
-  trong `nbtree` của Postgres — cùng mục đích: loại bỏ trường hợp biên khi tra cứu.
+- **Sentinel key rỗng** của sách tương ứng với phần tử **"âm vô cùng" (−∞)** ở đầu
+  mỗi internal page trong `nbtree` (không lưu key) — cùng mục đích: loại bỏ trường
+  hợp biên khi tra cứu. *(Đính chính: không phải high key. High key là **biên
+  trên** của page, dùng cho Lehman–Yao; sách không có khái niệm này.)*
 - Kỹ thuật test bằng **mock 3 callback** rất đáng học: nó cho phép test toàn bộ
   logic cây mà **không cần đụng tới disk**. Áp dụng được y nguyên cho dự án của bạn.

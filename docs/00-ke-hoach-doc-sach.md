@@ -52,3 +52,5 @@ nhưng **cách hiện thực** thì khác Postgres ở gần như mọi tầng.
 1. ~~Dịch hết 14 chương ra tiếng Việt vào `docs/sach/`.~~ ✅ **Xong** (4.598 dòng).
 2. Sau khi đọc xong, chốt kiến trúc để code (bám sách hay bám Postgres).
 3. Code theo `ROADMAP.md`.
+4. Từ chương 2: học **index song song** với PG Internals — xem
+   [01-ke-hoach-hoc-index-song-song.md](01-ke-hoach-hoc-index-song-song.md).

@@ -96,3 +96,127 @@ Nói `(a,b)` không dùng được cho `WHERE b` — **sai với Postgres 18** (
 (nhớ: CRC phải tính trên **cả `len` lẫn payload** để chặn bẫy vùng toàn số 0).
 
 **Đọc:** chương 11 (transaction) — chương 10 kết thúc bằng "cần có transaction".
+
+---
+---
+
+# Phần 2 — buổi tối: kế hoạch đi sâu index + Tầng 0
+
+Quyết định **đi sâu vào tầng index**, học song song sách Go với PostgreSQL.
+Học lại từ gốc **Tầng 0 — mô hình**, từng ý nhỏ một.
+
+### 2.1 Lên kế hoạch
+
+- Kế hoạch: [01-ke-hoach-hoc-index-song-song.md](../../01-ke-hoach-hoc-index-song-song.md) — 8 tầng, đi sâu dần
+- Chốt cách học: **sách Go làm xương sống**, PG Internals làm bản đồ,
+  `nbtree/README` làm chiều sâu, container `learn-pg` để kiểm chứng.
+  **Không** đọc sách PG tuần tự — chương B-tree chỉ ~20 trang, viết cho DBA,
+  không giải thuật toán.
+- Lưu `nbtree/README` của PG 18 vào [tham-khao/](../../tham-khao/nbtree-README-pg18.txt)
+- Đính chính ghi chú cuối `docs/sach/05`: sentinel key rỗng ↔ phần tử **−∞**
+  ở đầu page giữa, **không phải** high key
+
+⚠️ Kế hoạch đọc thấy **ngợp**. Đổi cách: **mỗi lần một ý nhỏ**, hiểu rồi mới sang ý tiếp.
+
+---
+
+### 2.2 Tầng 0 — 4 ý nhỏ
+
+Quy ước từ nay: chỉ dùng một từ **page** (bỏ chữ "node").
+**page gốc** = trên cùng · **page giữa** = ở giữa · **page lá** = dưới cùng.
+
+#### Ý 1: tính "page chứa được bao nhiêu" thì đổi về byte rồi mới chia
+
+```
+1 KB = 1024 byte  ->  4 KB = 4096 byte,  8 KB = 8192 byte
+page 4 KB, mỗi món 40 byte  ->  4096 / 40 = 102 món
+```
+
+#### Ý 2: mỗi tầng cây = đọc 1 page
+
+Đi từ page gốc xuống page lá, mỗi tầng đọc đúng 1 page.
+Cây 4 tầng → đọc **4 page**.
+
+#### Ý 3: Postgres phải đọc thêm 1 page ở file bảng
+
+Sách Go chỉ có **1 file**, cắt thành các page 4KB đánh số 0, 1, 2…; mỗi
+page cất một phần của cây. Postgres có **2 file**:
+
+```
+file index:  | page 0 | page 1 (gốc) | page 2 (lá) | ...
+file bảng:   | page 0 | page 1 | page 2 | page 3 | ...   <- heap, chứa dòng thật
+```
+
+| | page lá chứa | Đọc 1 dòng, cây 4 tầng |
+|---|---|---|
+| Sách Go | **cả dòng** | 4 page |
+| Postgres | chỉ **địa chỉ** của dòng (TID) | 4 + 1 = **5 page** |
+
+#### Ý 4: thêm 1 tầng thì sức chứa NHÂN lên, số page phải đọc chỉ CỘNG 1
+
+Mỗi page chứa 100 thứ. **Key chỉ nằm ở page lá**, page gốc/giữa chỉ chứa địa chỉ.
+
+```
+Tang 1:  1 page goc
+Tang 2:  100 page giua
+Tang 3:  100 x 100 = 10.000 page la  x 100 key  =  1.000.000 key
+```
+
+| Số tầng | Số key | Page phải đọc |
+|---|---|---|
+| 1 | 100 | 1 |
+| 2 | 10.000 | 2 |
+| 3 | 1.000.000 | 3 |
+| 4 | 100.000.000 | 4 |
+
+---
+
+### 2.3 Thí nghiệm trên Postgres thật
+
+Bảng `hoc.t` 100.000 dòng `int`, index B-tree trên `id` (container `learn-pg`, PG 18.6).
+
+| Đoán trước | Thật |
+|---|---|
+| 0,5 entry / page lá | **367** |
+| 3 tầng | **2 tầng**, page gốc có **274** con |
+| đọc 1 page | **3 page** (`Buffers: hit=2 read=1`) |
+
+Tính tay ra **đúng 367**:
+
+```
+8192 - 24 (header) - 16 (special) = 8152 byte dung duoc
+x 90% (PG chua 10% trong)         = 7337
+/ 20 byte moi entry (16 + 4)      = 366,8  ->  367
+```
+
+3 page = page gốc → page lá → page ở file bảng.
+276 page index = 274 lá + 1 gốc + 1 metapage (page 0).
+
+---
+
+### 2.4 Những chỗ đã vướng — và gốc của nó
+
+❌ **"0,5 entry"** — chia **KB cho byte** (8 ÷ 16). Phải đổi cùng đơn vị trước.
+
+❌ **"đọc 1 page"** — quên mỗi tầng cây là một lần đọc, và quên bước sang file bảng.
+
+❌ **"10.101 key"** — cộng `1 + 100 + 10.000`. Đó là **tổng số page**, không phải
+số key. Hai lỗi chồng nhau:
+- key **chỉ nằm ở page lá** → chỉ đếm tầng lá
+- "mỗi page chứa 100" → phải **nhân**, không cộng
+
+❓ Hỏi lại được hai chỗ dễ lẫn: *lá và page khác gì?* (page = cái hộp, lá = vai
+trò của hộp trong cây), *sách Go chỉ có 1 file thì page ở đâu?* (page = một khúc của file).
+
+---
+
+### 2.5 Lần sau học gì
+
+**Tầng 1 — một page index, từng byte.** Đi từng ý nhỏ:
+
+1. Hex là gì, vì sao `6f 01` lại là số 367 (little-endian)
+2. Bên trong một page: header ở đầu, danh sách địa chỉ, dữ liệu ở cuối
+3. Tự đọc header của một page lá thật trong `learn-pg`
+
+#### Còn nợ thêm
+- [ ] (để sau) Index 110.000 dòng có mấy tầng? — cần biết page giữa chỉ lấp 70%
