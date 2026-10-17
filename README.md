@@ -2,13 +2,23 @@
 
 Mini database engine viết bằng Go, build từ con số 0 để làm chủ PostgreSQL từ a→z.
 
+- **[docs/TONG-HOP.md](docs/TONG-HOP.md)** — tổng hợp toàn bộ kiến thức đã học, xếp theo ý tưởng
 - [ARCHITECTURE.md](ARCHITECTURE.md) — kiến trúc thư mục, luật phụ thuộc, map sang source Postgres
 - [ROADMAP.md](ROADMAP.md) — lộ trình 7 milestone
 
 ## Trạng thái
 
-Project mới khởi tạo: đã có go.mod và khung thư mục, chưa có code.
-Bắt đầu từ **M1 — storage layer** (`internal/storage`).
+| Milestone | Nội dung | |
+|---|---|---|
+| M1 | Page, tuple, heap, `pagedump` | ✅ |
+| M2 | Buffer pool, B-tree, 3 kiểu quét | ✅ |
+| M3 | WAL, crash recovery | ⬜ |
+| M4 | MVCC, VACUUM | ⬜ |
+| M5 | Parser, catalog | ⬜ |
+| M6 | Planner, executor, EXPLAIN | ⬜ |
+| M7 | Wire protocol | ⬜ |
+
+Sách: xong chương 1–4, 6 (nửa đầu), 10.
 
 ## Chạy test
 
